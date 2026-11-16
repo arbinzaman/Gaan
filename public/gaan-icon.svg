@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <rect width="128" height="128" rx="32" fill="#070709"/>
+  <rect x="4" y="4" width="120" height="120" rx="28" stroke="url(#borderGrad)" stroke-width="2" stroke-opacity="0.4"/>
+  <circle cx="64" cy="64" r="42" fill="url(#glowGrad)" opacity="0.22"/>
+  <path d="M44 52V76M56 40V88M68 32V96M80 44V84M92 54V74" stroke="url(#waveGrad)" stroke-width="7" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="waveGrad" x1="36" y1="28" x2="96" y2="100" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34D399"/>
+      <stop offset="0.5" stop-color="#10B981"/>
+      <stop offset="1" stop-color="#06B6D4"/>
+    </linearGradient>
+    <linearGradient id="borderGrad" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34D399"/>
+      <stop offset="1" stop-color="#06B6D4"/>
+    </linearGradient>
+    <radialGradient id="glowGrad" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(64 64) rotate(90) scale(42)">
+      <stop stop-color="#10B981"/>
+      <stop offset="1" stop-color="#10B981" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+</svg>

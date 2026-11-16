@@ -1,0 +1,18 @@
+{
+  "name": "Gaan — Voice-Controlled YouTube Music Player",
+  "short_name": "Gaan",
+  "description": "Hands-free voice-controlled YouTube music player built for motorcycle riders and drivers.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070709",
+  "theme_color": "#070709",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/gaan-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
