@@ -53,75 +53,189 @@ async function fetchDirectStreamFromPlayerApi(
 ): Promise<CachedStreamInfo | null> {
   const visitorData = await getYouTubeVisitorData();
 
-  try {
-    const res = await fetch(
-      'https://www.youtube.com/youtubei/v1/player?prettyPrint=false',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent':
-            'com.google.ios.youtube/20.03.02 (iPhone16,2; U; CPU iOS 18_2_1 like Mac OS X;)',
-          ...(visitorData ? { 'X-Goog-Visitor-Id': visitorData } : {}),
-        },
-        body: JSON.stringify({
-          context: {
-            client: {
-              clientName: 'IOS',
-              clientVersion: '20.03.02',
-              deviceMake: 'Apple',
-              deviceModel: 'iPhone16,2',
-              osName: 'iPhone',
-              osVersion: '18.2.1.22C161',
-              visitorData,
-              hl: 'en',
-              gl: 'US',
-            },
+  const clients = [
+    {
+      ua: 'com.google.ios.youtube/20.03.02 (iPhone16,2; U; CPU iOS 18_2_1 like Mac OS X;)',
+      context: {
+        clientName: 'IOS',
+        clientVersion: '20.03.02',
+        deviceMake: 'Apple',
+        deviceModel: 'iPhone16,2',
+        osName: 'iPhone',
+        osVersion: '18.2.1.22C161',
+        visitorData,
+        hl: 'en',
+        gl: 'US',
+      },
+    },
+    {
+      ua: 'com.google.android.apps.youtube.vr.oculus/1.62.27 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip',
+      context: {
+        clientName: 'ANDROID_VR',
+        clientVersion: '1.62.27',
+        deviceMake: 'Oculus',
+        deviceModel: 'Quest 3',
+        osName: 'Android',
+        osVersion: '12L',
+        androidSdkVersion: 32,
+        visitorData,
+        hl: 'en',
+        gl: 'US',
+      },
+    },
+    {
+      ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      context: {
+        clientName: 'TVHTML5_SIMPLY_EMBEDDED_PLAYER',
+        clientVersion: '2.0',
+        visitorData,
+        hl: 'en',
+        gl: 'US',
+      },
+    },
+  ];
+
+  for (const client of clients) {
+    try {
+      const res = await fetch(
+        'https://www.youtube.com/youtubei/v1/player?prettyPrint=false',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': client.ua,
+            ...(visitorData ? { 'X-Goog-Visitor-Id': visitorData } : {}),
           },
-          videoId,
-        }),
+          body: JSON.stringify({
+            context: {
+              client: client.context,
+              thirdParty: { embedUrl: 'https://www.youtube.com/' },
+            },
+            videoId,
+          }),
+        }
+      );
+
+      if (!res.ok) continue;
+      const data = await res.json();
+      const adaptive: Array<{ itag?: number; url?: string; mimeType?: string }> =
+        Array.isArray(data?.streamingData?.adaptiveFormats)
+          ? data.streamingData.adaptiveFormats
+          : [];
+      const formats: Array<{ itag?: number; url?: string; mimeType?: string }> =
+        Array.isArray(data?.streamingData?.formats)
+          ? data.streamingData.formats
+          : [];
+
+      const allFormats = [...adaptive, ...formats].filter(
+        (f) => typeof f.url === 'string' && f.url.startsWith('http')
+      );
+
+      const mp4Audio =
+        allFormats.find((f) => f.itag === 140) ||
+        allFormats.find((f) => (f.mimeType || '').startsWith('audio/mp4'));
+
+      if (mp4Audio && mp4Audio.url) {
+        return {
+          url: mp4Audio.url,
+          mimeType: 'audio/mp4',
+          expiresAt: Date.now() + 25 * 60 * 1000,
+        };
       }
-    );
 
-    if (!res.ok) return null;
-    const data = await res.json();
-    const adaptive: Array<{ itag?: number; url?: string; mimeType?: string }> =
-      Array.isArray(data?.streamingData?.adaptiveFormats)
-        ? data.streamingData.adaptiveFormats
-        : [];
-    const formats: Array<{ itag?: number; url?: string; mimeType?: string }> =
-      Array.isArray(data?.streamingData?.formats)
-        ? data.streamingData.formats
-        : [];
-
-    const allFormats = [...adaptive, ...formats].filter(
-      (f) => typeof f.url === 'string' && f.url.startsWith('http')
-    );
-
-    const mp4Audio =
-      allFormats.find((f) => f.itag === 140) ||
-      allFormats.find((f) => (f.mimeType || '').startsWith('audio/mp4'));
-
-    if (mp4Audio && mp4Audio.url) {
-      return {
-        url: mp4Audio.url,
-        mimeType: 'audio/mp4',
-        expiresAt: Date.now() + 25 * 60 * 1000,
-      };
+      const mp4Combined = allFormats.find((f) =>
+        (f.mimeType || '').startsWith('video/mp4')
+      );
+      if (mp4Combined && mp4Combined.url) {
+        return {
+          url: mp4Combined.url,
+          mimeType: 'audio/mp4',
+          expiresAt: Date.now() + 25 * 60 * 1000,
+        };
+      }
+    } catch {
+      // Try next client
     }
+  }
 
-    const mp4Combined = allFormats.find((f) =>
-      (f.mimeType || '').startsWith('video/mp4')
-    );
-    if (mp4Combined && mp4Combined.url) {
-      return {
-        url: mp4Combined.url,
-        mimeType: 'audio/mp4',
-        expiresAt: Date.now() + 25 * 60 * 1000,
-      };
+  return null;
+}
+
+function extractVideoIds(data: unknown, max = 5): string[] {
+  const ids: string[] = [];
+  function walk(node: unknown) {
+    if (!node || typeof node !== 'object' || ids.length >= max) return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
     }
-  } catch {
-    // Ignore
+    const obj = node as Record<string, unknown>;
+    const vr = obj.videoRenderer as Record<string, unknown> | undefined;
+    if (vr && typeof vr.videoId === 'string' && !ids.includes(vr.videoId)) {
+      ids.push(vr.videoId);
+    }
+    for (const v of Object.values(obj)) walk(v);
+  }
+  walk(data);
+  return ids;
+}
+
+async function resolvePlayableAudioStream(
+  videoId: string,
+  fallbackTitle?: string
+): Promise<CachedStreamInfo | null> {
+  const cached = audioStreamCache.get(videoId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached;
+  }
+
+  const direct = await fetchDirectStreamFromPlayerApi(videoId);
+  if (direct) {
+    audioStreamCache.set(videoId, direct);
+    return direct;
+  }
+
+  if (fallbackTitle && fallbackTitle.trim()) {
+    try {
+      const cleanTitle = fallbackTitle.replace(/radio|live|24\/7/gi, '').trim();
+      const searchRes = await fetch(
+        'https://www.youtube.com/youtubei/v1/search?prettyPrint=false',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          },
+          body: JSON.stringify({
+            context: {
+              client: {
+                clientName: 'WEB',
+                clientVersion: '2.20250214.01.00',
+                hl: 'en',
+                gl: 'US',
+              },
+            },
+            query: `${cleanTitle} audio track`,
+          }),
+        }
+      );
+
+      if (searchRes.ok) {
+        const json = await searchRes.json();
+        const candidates = extractVideoIds(json, 5);
+        for (const candId of candidates) {
+          if (candId === videoId) continue;
+          const altStream = await fetchDirectStreamFromPlayerApi(candId);
+          if (altStream) {
+            audioStreamCache.set(videoId, altStream);
+            return altStream;
+          }
+        }
+      }
+    } catch {
+      // Ignore
+    }
   }
 
   return null;
@@ -131,21 +245,15 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   try {
     const urlObj = new URL(req.url || '', 'http://localhost');
     const videoId = (urlObj.searchParams.get('id') || '').trim();
+    const title = (urlObj.searchParams.get('title') || '').trim();
+
     if (!videoId) {
       res.statusCode = 400;
       res.end();
       return;
     }
 
-    let streamInfo = audioStreamCache.get(videoId);
-    if (!streamInfo || streamInfo.expiresAt <= Date.now()) {
-      const fetched = await fetchDirectStreamFromPlayerApi(videoId);
-      if (fetched) {
-        audioStreamCache.set(videoId, fetched);
-        streamInfo = fetched;
-      }
-    }
-
+    let streamInfo = await resolvePlayableAudioStream(videoId, title);
     if (!streamInfo) {
       res.statusCode = 404;
       res.end();
@@ -172,6 +280,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     });
 
     if (!upstream.ok && upstream.status !== 206) {
+      audioStreamCache.delete(videoId);
       res.statusCode = 502;
       res.end();
       return;

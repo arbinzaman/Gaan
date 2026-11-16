@@ -533,8 +533,9 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         className={
           showVideoFrame
             ? 'relative w-full aspect-video rounded-3xl overflow-hidden border border-zinc-800/70 bg-black shadow-xl'
-            : 'fixed bottom-20 right-4 w-[220px] h-[124px] rounded-2xl overflow-hidden border border-zinc-800/80 bg-black shadow-2xl z-20'
+            : 'fixed -left-[9999px] -top-[9999px] w-[220px] h-[124px] opacity-0 pointer-events-none overflow-hidden'
         }
+        aria-hidden={!showVideoFrame}
       >
         <div ref={containerRef} className="w-full h-full" />
       </div>
